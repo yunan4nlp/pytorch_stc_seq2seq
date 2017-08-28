@@ -23,16 +23,17 @@ class Decoder(nn.Module):
         self.linearLayer = nn.Linear(hyperParams.rnnHiddenSize, hyperParams.responseWordNum)
         self.softmax = nn.LogSoftmax()
 
-    def initHidden(self):
-        result = torch.autograd.Variable(torch.zeros(1, 1, self.hyperParams.rnnHiddenSize))
+    def initHidden(self, batch = 1):
+        result = torch.autograd.Variable(torch.zeros(1, batch, self.hyperParams.rnnHiddenSize))
         return result
 
     def forward(self, encoderHidden, hidden, lastWordIndex):
-        wordRepresent = self.wordEmb(lastWordIndex)
+        wordRepresent = self.wordEmb(lastWordIndex.squeeze())
         wordRepresent = self.dropOut(wordRepresent)
         wordRepresent = wordRepresent.unsqueeze(0)
         concat = torch.cat((encoderHidden, wordRepresent), 2)
-        output, hidden = self.gru(concat, hidden)
-        output = self.softmax(self.linearLayer(output[0]))
+        output, hidden = self.gru(concat.permute(1, 0, 2), hidden)
+        output = torch.squeeze(output, 1)
+        output = self.softmax(self.linearLayer(output))
         return output, hidden
 

@@ -101,6 +101,34 @@ class Trainer:
             exams.append(example)
         return exams
 
+    def getBatchFeatLabel(self, exams):
+        maxPostLen = -1
+        maxResponseLen = -1
+        batch = self.hyperParams.batch
+        for e in exams:
+            if maxPostLen < e.postWordIndexs.size()[1]:
+                maxPostLen = e.postWordIndexs.size()[1]
+            if maxResponseLen < e.responseWordIndexs.size()[1]:
+                maxResponseLen = e.responseWordIndexs.size()[1]
+        postBatchFeat = torch.autograd.Variable(torch.LongTensor(batch, maxPostLen))
+        responseBatchFeat = torch.autograd.Variable(torch.LongTensor(batch, maxResponseLen))
+
+        for idx in range(batch):
+            e = exams[idx]
+            for idy in range(maxPostLen):
+                if idy < e.postWordIndexs.size()[1]:
+                    postBatchFeat.data[idx][idy] = e.postWordIndexs.data[0][idy]
+                else:
+                    postBatchFeat.data[idx][idy] = self.hyperParams.postPaddingID
+
+            for idy in range(maxResponseLen):
+                if idy < e.responseWordIndexs.size()[1]:
+                    responseBatchFeat.data[idx][idy] = e.responseWordIndexs.data[0][idy]
+                else:
+                    responseBatchFeat.data[idx][idy] = self.hyperParams.responsePaddingID
+        return postBatchFeat, responseBatchFeat
+
+
     def train(self, train_file, dev_file, test_file):
         self.hyperParams.show()
         torch.set_num_threads(self.hyperParams.thread)
@@ -133,27 +161,36 @@ class Trainer:
         decoder_parameters = filter(lambda p: p.requires_grad, self.decoder.parameters())
         decoder_optimizer = torch.optim.Adam(decoder_parameters, lr = self.hyperParams.learningRate)
 
+        batchBlock = len(trainExamples) // self.hyperParams.batch
         for iter in range(self.hyperParams.maxIter):
             print('###Iteration' + str(iter) + "###")
             random.shuffle(indexes)
             self.encoder.train()
             self.decoder.train()
-            for updateIter in range(len(trainExamples)):
+            for updateIter in range(batchBlock):
+                exams = []
+                start_pos = updateIter * self.hyperParams.batch
+                end_pos = (updateIter + 1) * self.hyperParams.batch
+                for idx in range(start_pos, end_pos):
+                    exams.append(trainExamples[indexes[idx]])
+                postFeats, responseFeats = self.getBatchFeatLabel(exams)
                 encoder_optimizer.zero_grad()
                 decoder_optimizer.zero_grad()
 
-                encoder_hidden = self.encoder.init_hidden()
-                encoder_output, encoder_hidden = self.encoder(trainExamples[updateIter].postWordIndexs, encoder_hidden)
-
-                decoder_hidden = self.decoder.initHidden()
-                response_len = trainExamples[updateIter].responseLen
-                last_word = torch.autograd.Variable(torch.LongTensor([self.hyperParams.responseStartID]))
+                encoder_hidden = self.encoder.init_hidden(self.hyperParams.batch)
+                encoder_output, encoder_hidden = self.encoder(postFeats, encoder_hidden)
+                decoder_hidden = self.decoder.initHidden(self.hyperParams.batch)
+                #response_len = trainExamples[updateIter].responseLen
+                response_len =  responseFeats.size()[1]
+                last_word = torch.autograd.Variable(torch.LongTensor(1, self.hyperParams.batch))
+                for idx in range(self.hyperParams.batch):
+                    last_word.data[0][idx] = self.hyperParams.responseStartID
                 loss = 0
-                for idx in range(response_len + 1):
+                for idx in range(response_len):
                     decoder_output, decoder_hidden = self.decoder(encoder_hidden, decoder_hidden, last_word)
-                    loss += torch.nn.functional.nll_loss(decoder_output, trainExamples[updateIter].responseWordIndexs[0][idx])
-                    wordId = self.getMaxIndex(decoder_output)
-                    last_word = torch.autograd.Variable(torch.LongTensor([wordId]))
+                    loss += torch.nn.functional.nll_loss(decoder_output, responseFeats.permute(1, 0)[idx])
+                    for idy in range(self.hyperParams.batch):
+                        last_word.data[0][idy] = self.getMaxIndex(decoder_output[idy])
                 loss.backward()
                 print('Current: ', updateIter + 1, ", Cost:", loss.data[0])
                 encoder_optimizer.step()
@@ -172,7 +209,7 @@ class Trainer:
         last_word = torch.autograd.Variable(torch.LongTensor([self.hyperParams.responseStartID]))
         for idx in range(self.hyperParams.maxResponseLen):
             decoder_output, decoder_hidden = self.decoder(encoder_hidden, decoder_hidden, last_word)
-            wordId = self.getMaxIndex(decoder_output)
+            wordId = self.getMaxIndex(decoder_output[0])
             last_word = torch.autograd.Variable(torch.LongTensor([wordId]))
             wordStr = self.hyperParams.responseWordAlpha.from_id(wordId)
             if wordStr == self.hyperParams.end:
@@ -183,11 +220,11 @@ class Trainer:
 
 
     def getMaxIndex(self, decoder_output):
-        max = decoder_output.data[0][0]
+        max = decoder_output.data[0]
         maxIndex = 0
         for idx in range(1, self.hyperParams.responseWordNum):
-            if decoder_output.data[0][idx] > max:
-                max = decoder_output.data[0][idx]
+            if decoder_output.data[idx] > max:
+                max = decoder_output.data[idx]
                 maxIndex = idx
         return maxIndex
 

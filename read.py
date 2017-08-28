@@ -7,13 +7,10 @@ class Reader:
         insts = []
         r = open(path, encoding='utf8')
         info = []
-        count = 0
         for line in r.readlines():
-            print(count)
-            count+=1
             line = line.strip()
             if line == '':
-                for idx in range(1, 2):
+                for idx in range(1, len(info)):
                     inst = Instance()
                     inst.post = info[0].split(" ")
                     inst.response = info[idx].split(" ")
@@ -22,6 +19,13 @@ class Reader:
                 info = []
             else:
                 info.append(line)
+        if len(info) != 0:
+            for idx in range(1, len(info)):
+                inst = Instance()
+                inst.post = info[0].split(" ")
+                inst.response = info[idx].split(" ")
+                if maxInst == -1 or (len(insts) < maxInst):
+                    insts.append(inst)
         r.close()
         return insts
 
@@ -46,13 +50,11 @@ class Reader:
         count = len(indexs)
         for idx in range(embDim):
             oov_emb[0][idx] /= count
-
         unkID = alpha.from_string(unk)
         print('UNK ID: ', unkID)
         if unkID != -1:
             for idx in range(embDim):
                 emb.weight.data[unkID][idx] = oov_emb[0][idx]
-
         print("Load Embedding file: ", file, ", size: ", embDim)
         oov = 0
         for idx in range(alpha.m_size):

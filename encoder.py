@@ -21,8 +21,8 @@ class Encoder(nn.Module):
 
 
 
-    def init_hidden(self):
-        hidden = torch.autograd.Variable(torch.zeros(1, 1, self.hyperParams.rnnHiddenSize))
+    def init_hidden(self, batch = 1):
+        hidden = torch.autograd.Variable(torch.zeros(1, batch, self.hyperParams.rnnHiddenSize))
         return hidden
 
     def forward(self, postWordIndexes, hidden):
