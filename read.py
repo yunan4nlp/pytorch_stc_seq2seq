@@ -1,8 +1,29 @@
 from instance import  Instance
 import torch
+import re
 import torch.nn as nn
 
 class Reader:
+    def clean_str(self, string):
+        """
+        Tokenization/string cleaning for all datasets except for SST.
+        Original taken from https://github.com/yoonkim/CNN_sentence/blob/master/process_data.py
+        """
+        string = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", string)
+        string = re.sub(r"\'s", " \'s", string)
+        string = re.sub(r"\'ve", " \'ve", string)
+        string = re.sub(r"n\'t", " n\'t", string)
+        string = re.sub(r"\'re", " \'re", string)
+        string = re.sub(r"\'d", " \'d", string)
+        string = re.sub(r"\'ll", " \'ll", string)
+        string = re.sub(r",", " , ", string)
+        string = re.sub(r"!", " ! ", string)
+        string = re.sub(r"\(", " \( ", string)
+        string = re.sub(r"\)", " \) ", string)
+        string = re.sub(r"\?", " \? ", string)
+        string = re.sub(r"\s{2,}", " ", string)
+        return string.strip().lower()
+
     def readInstances(self, path, maxInst = -1):
         insts = []
         r = open(path, encoding='utf8')
@@ -12,8 +33,10 @@ class Reader:
             if line == '':
                 for idx in range(1, len(info)):
                     inst = Instance()
-                    inst.post = info[0].split(" ")
-                    inst.response = info[idx].split(" ")
+                    post = self.clean_str(info[0])
+                    inst.post = post.split(" ")
+                    response = self.clean_str(info[idx])
+                    inst.response = response.split(" ")
                     if maxInst == -1 or (len(insts) < maxInst):
                         insts.append(inst)
                 info = []

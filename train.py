@@ -194,12 +194,12 @@ class Trainer:
                 print('Current: ', updateIter + 1, ", Cost:", loss.data[0])
                 encoder_optimizer.step()
                 decoder_optimizer.step()
-        self.encoder.eval()
-        self.decoder.eval()
-
-        print("Save model .....")
-        self.saveModel(model_file)
-        print("Model model ok")
+            if iter + 1 % 10 == 0:
+                self.encoder.eval()
+                self.decoder.eval()
+                print("Save model .....")
+                self.saveModel(model_file+str(iter))
+                print("Model model ok")
 
     def saveModel(self, model_file):
         torch.save([self.encoder, self.decoder], model_file)
