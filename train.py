@@ -129,7 +129,7 @@ class Trainer:
         return postBatchFeat, responseBatchFeat
 
 
-    def train(self, train_file, dev_file, test_file):
+    def train(self, train_file, dev_file, test_file, model_file):
         self.hyperParams.show()
         torch.set_num_threads(self.hyperParams.thread)
         reader = Reader()
@@ -180,7 +180,6 @@ class Trainer:
                 encoder_hidden = self.encoder.init_hidden(self.hyperParams.batch)
                 encoder_output, encoder_hidden = self.encoder(postFeats, encoder_hidden)
                 decoder_hidden = self.decoder.initHidden(self.hyperParams.batch)
-                #response_len = trainExamples[updateIter].responseLen
                 response_len =  responseFeats.size()[1]
                 last_word = torch.autograd.Variable(torch.LongTensor(1, self.hyperParams.batch))
                 for idx in range(self.hyperParams.batch):
@@ -195,11 +194,45 @@ class Trainer:
                 print('Current: ', updateIter + 1, ", Cost:", loss.data[0])
                 encoder_optimizer.step()
                 decoder_optimizer.step()
-
         self.encoder.eval()
         self.decoder.eval()
-        for idx in range(len(devExamples)):
-            self.predict(devExamples[idx])
+
+        print("Save model .....")
+        self.saveModel(model_file)
+        print("Model model ok")
+
+    def saveModel(self, model_file):
+        torch.save([self.encoder, self.decoder], model_file)
+        self.hyperParams.postWordAlpha.write(model_file + ".post")
+        self.hyperParams.responseWordAlpha.write(model_file + ".response")
+
+    def loadModel(self, model_file):
+        self.encoder, self.decoder = torch.load(model_file)
+        self.encoder.eval()
+        self.decoder.eval()
+        self.hyperParams.postWordAlpha.read(model_file + ".post")
+        self.hyperParams.responseWordAlpha.read(model_file + ".response")
+
+        self.hyperParams.postStartID = self.hyperParams.postWordAlpha.from_string(self.hyperParams.start)
+        self.hyperParams.postEndID = self.hyperParams.postWordAlpha.from_string(self.hyperParams.end)
+        self.hyperParams.postUnkWordID = self.hyperParams.postWordAlpha.from_string(self.hyperParams.unk)
+        self.hyperParams.postPaddingID = self.hyperParams.postWordAlpha.from_string(self.hyperParams.padding)
+        self.hyperParams.postWordNum = self.hyperParams.postWordAlpha.m_size
+
+        self.hyperParams.responseStartID = self.hyperParams.responseWordAlpha.from_string(self.hyperParams.start)
+        self.hyperParams.responseEndID = self.hyperParams.responseWordAlpha.from_string(self.hyperParams.end)
+        self.hyperParams.responseUnkWordID = self.hyperParams.responseWordAlpha.from_string(self.hyperParams.unk)
+        self.hyperParams.responsePaddingID = self.hyperParams.responseWordAlpha.from_string(self.hyperParams.padding)
+        self.hyperParams.responseWordNum = self.hyperParams.responseWordAlpha.m_size
+
+
+    def test(self, test_file, model_file):
+        self.loadModel(model_file)
+        reader = Reader()
+        testInsts = reader.readInstances(test_file, self.hyperParams.maxInstance)
+        testExamples = self.instance2Example(testInsts)
+        for idx in range(len(testExamples)):
+            self.predict(testExamples[idx])
 
     def predict(self, exam):
         encoder_hidden = self.encoder.init_hidden()
@@ -242,9 +275,18 @@ parser.add_option("--dev", dest="devFile",
 parser.add_option("--test", dest="testFile",
                   help="test dataset")
 
+parser.add_option("--model", dest="modelFile",
+                  help="model file")
+parser.add_option(
+    "-l", "--learn", dest="learn", help="learn or test", action="store_false", default=True)
 
+random.seed(0)
+torch.manual_seed(0)
 (options, args) = parser.parse_args()
 l = Trainer()
-l.train(options.trainFile, options.devFile, options.testFile)
+if options.learn:
+    l.train(options.trainFile, options.devFile, options.testFile, options.modelFile)
+else:
+    l.test(options.testFile,options.modelFile)
 
 

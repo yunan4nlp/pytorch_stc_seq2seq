@@ -23,20 +23,20 @@ class HyperParams:
         self.responseStartID = 0
         self.responseEndID = 0
 
-        self.maxIter = 10000
+        self.maxIter = 100
         self.verboseIter = 20
         self.wordCutOff = 0
         self.wordEmbSize = 100
         self.wordFineTune = True
-        self.wordEmbFile = "E:\\py_workspace\\mySeq2Seq\\data\\ctb60.50d.vec"
-        #self.wordEmbFile = ""
+        #self.wordEmbFile = "E:\\py_workspace\\mySeq2Seq\\data\\ctb60.50d.vec"
+        self.wordEmbFile = ""
         self.dropProb = 0.1
         self.rnnHiddenSize = 50
         self.hiddenSize = 100
         self.thread = 1
         self.learningRate = 0.001
-        self.maxInstance = -1
-        self.batch = 12
+        self.maxInstance = 1
+        self.batch = 1
 
         self.postWordAlpha = Alphabet()
         self.responseWordAlpha = Alphabet()
@@ -100,3 +100,19 @@ class Alphabet:
             if  elem_state[key] > cutoff:
                 self.from_string(key)
         self.set_fixed_flag(True)
+
+    def write(self, path):
+        outf = open(path, encoding='utf-8', mode='w')
+        for idx in range(self.m_size):
+            outf.write(self.id2string[idx] + " " + str(idx) + "\n")
+        outf.close()
+
+    def read(self, path):
+        inf = open(path, encoding='utf-8', mode='r')
+        for line in inf.readlines():
+            info = line.split(" ")
+            self.id2string.append(info[0])
+            self.string2id[info[0]] = int(info[1])
+        inf.close()
+        self.set_fixed_flag(True)
+        self.m_size = len(self.id2string)
